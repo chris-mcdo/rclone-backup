@@ -1,0 +1,54 @@
+name: release metadata
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-version:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ["0.8.1", "1.2.3", "0.8.1rc1"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Read production release tag patterns
+        id: patterns
+        env:
+          TEST_VERSION: ${{ matrix.version }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          lines = Path('.github/workflows/release.yaml').read_text().splitlines()
+          patterns = [line.strip() for line in lines if line.strip().startswith('type=pep440,')]
+          assert len(patterns) == 3, 'Expected three production PEP 440 patterns'
+          tags = '\n'.join(pattern + ',value=' + os.environ['TEST_VERSION'] for pattern in patterns)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('tags<<END_TAGS\n' + tags + '\nEND_TAGS\n')
+          PY
+      - name: Exercise the real metadata action
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: example/release-check
+          flavor: latest=false
+          tags: ${{ steps.patterns.outputs.tags }}
+      - name: Check selected version and image label
+        env:
+          EXPECTED_VERSION: ${{ matrix.version }}
+          SELECTED_VERSION: ${{ steps.meta.outputs.version }}
+          METADATA_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          python - <<'PY'
+          import json, os
+          expected = os.environ['EXPECTED_VERSION']
+          assert os.environ['SELECTED_VERSION'] == expected
+          labels = json.loads(os.environ['METADATA_JSON'])['labels']
+          assert labels['org.opencontainers.image.version'] == expected
+          PY
