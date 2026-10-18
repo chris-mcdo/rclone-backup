@@ -85,5 +85,20 @@ Run synthetic failure-injection tests with:
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The image's base/rclone/PostgreSQL client upgrade is a separate change. Review and
-pin supported versions before building the final catch-up upgrade image.
+The image pins rclone 1.75.2/Alpine by digest and explicitly installs PostgreSQL
+17 client tools. It retains the rclone user's UID/GID 1009 and the daily 03:00 UTC
+cron schedule. GNU date/tar/gzip/comparison tools are installed explicitly for the
+repaired scripts. APK package versions are recorded in
+`/usr/local/share/backup-packages.txt`; deploy the tested immutable image.
+
+CI also runs `python3 tests/rehearse_image.py` with Docker available. It uses
+disposable PostgreSQL 17 and WebDAV containers, synthetic credentials/sentinels,
+an internal network with no published ports, and automatic cleanup. It verifies
+dump/upload/full read-back, a separate restore, and safe credential/upload/
+corruption/listing/pruning failures. It never uses production backups or remote
+configuration. Set `BACKUP_REHEARSAL_IMAGE` to select a locally built image.
+
+The PostgreSQL dump client must be at least as new as the database server major.
+Deploy the reviewed client-17 image before or with PostgreSQL 17 migration, and
+verify the first production backup/read-back after cutover. Do not switch the
+database to 17 while retaining the old client-14 backup image.
