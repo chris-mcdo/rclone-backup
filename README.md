@@ -22,7 +22,7 @@ If you run this script periodically, you have a simple backup scheme.
 
 * This backup script:
 
-    * Runs any scripts found in the `/usr/local/bin/dump-backup.d` directory (e.g. scripts which dump data to the backup directory).
+    * Runs any scripts found in the `/usr/local/bin/backup-dump.d` directory (e.g. scripts which dump data to the backup directory).
 
     * Archives and compresses the backup directory (default `/data/backup`) and places it in `/data/upload`.
 
@@ -61,3 +61,29 @@ The `stdout`/`stderr` of all scripts are written to the `stdout`/`stderr` of the
 See the
 [License](https://github.com/chris-mcdo/rclone-backup/blob/main/LICENSE)
 file for details.
+
+## Failure handling and verification
+
+Dump hooks and archive/upload/read-back failures stop the job before pruning.
+Every uploaded archive is downloaded completely and byte-compared before exact-file
+retention deletion. Failed uploads retain completed local archives; a same-day
+retry refuses to overwrite them. Inspect and recover retained archives before
+retrying. An interrupted job can leave a lock requiring manual review.
+
+PostgreSQL dumps are written atomically and catalog-checked. The two newest dated
+dumps are retained locally, increasing archive size and scratch-space needs.
+The historical `.db.gz` suffix denotes PostgreSQL custom format, without an outer
+gzip wrapper. A catalog check is not a full restore test. Credentials may use
+the existing environment variables or their `_FILE` counterparts; do not set both.
+
+Allow space for the current archive, its complete verification download, retained
+dumps and temporary files. Backup scope and scheduling are unchanged.
+
+Run synthetic failure-injection tests with:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+The image's base/rclone/PostgreSQL client upgrade is a separate change. Review and
+pin supported versions before building the final catch-up upgrade image.
