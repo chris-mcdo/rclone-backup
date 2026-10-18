@@ -36,7 +36,19 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
             type=pep440,pattern={{major}}
             type=pep440,pattern={{major}}.{{minor}}
-            type=pep440,pattern={{version}}
+            type=pep440,pattern={{version}},priority=1000
+
+      - name: Verify full release version before building
+        env:
+          SELECTED_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          expected = os.environ['GITHUB_REF_NAME'].removeprefix('v')
+          actual = os.environ['SELECTED_VERSION']
+          if actual != expected:
+              raise SystemExit(f'Release version mismatch: expected {expected}, got {actual}')
+          PY
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v3
